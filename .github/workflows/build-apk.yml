@@ -1,0 +1,57 @@
+name: Build BoutikPro APK
+
+on:
+  push:
+    branches: [ '**' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Restore debug keystore
+        run: base64 -d debug.keystore.base64 > debug.keystore
+
+      - name: Build Debug APK
+        run: gradle assembleDebug
+
+      - name: Prepare APK file
+        run: cp app/build/outputs/apk/debug/app-debug.apk BoutikPro.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BoutikPro-APK
+          path: BoutikPro.apk
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-apk
+          name: BoutikPro (APK de test)
+          body: "APK prêt à installer directement sur Android (avec signature Firebase déjà configurée)."
+          files: BoutikPro.apk
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

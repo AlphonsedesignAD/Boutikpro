@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">BoutikPro</string>
+    <string name="sign_in_google">Continuer avec Google</string>
+    <string name="role_seller">Vendeur</string>
+    <string name="role_admin">Admin</string>
+    <string name="tab_scan_cart">Caisse &amp; Scan</string>
+    <string name="tab_sales_history">Ventes</string>
+    <string name="tab_inventory">Stocks &amp; Produits</string>
+    <string name="tab_barcodes">Codes-Barres</string>
+    <string name="confirm_payment">Confirmer le paiement</string>
+    <string name="print_category">Imprimer la catégorie</string>
+</resources>

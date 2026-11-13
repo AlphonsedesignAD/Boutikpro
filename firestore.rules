@@ -1,0 +1,123 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidCategory(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
+             data.colorHex is string && data.colorHex.size() >= 4 && data.colorHex.size() <= 9 &&
+             data.iconKey is string && data.iconKey.size() >= 1 && data.iconKey.size() <= 40;
+    }
+
+    function isValidProduct(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             isValidId(data.categoryId) &&
+             data.categoryName is string && data.categoryName.size() >= 1 && data.categoryName.size() <= 60 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.barcode is string && data.barcode.size() >= 3 && data.barcode.size() <= 64 &&
+             data.price is number && data.price >= 0 && data.price <= 10000000 &&
+             data.stock is int && data.stock >= 0 && data.stock <= 1000000 &&
+             data.minStockAlert is int && data.minStockAlert >= 0 && data.minStockAlert <= 100000;
+    }
+
+    function isValidSale(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.receiptNumber is string && data.receiptNumber.size() >= 1 && data.receiptNumber.size() <= 40 &&
+             data.totalAmount is number && data.totalAmount >= 0 && data.totalAmount <= 100000000 &&
+             data.itemCount is int && data.itemCount >= 1 && data.itemCount <= 10000 &&
+             data.paymentMethod is string && data.paymentMethod in ['cash', 'card', 'mobile'] &&
+             data.status is string && data.status == 'paid' &&
+             data.items is list && data.items.size() >= 1 && data.items.size() <= 100 &&
+             data.items[0] is map;
+    }
+
+    match /users/{userId}/categories/{categoryId} {
+      allow get: if isOwner(userId) && isValidId(categoryId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(categoryId) &&
+                       incoming().keys().hasAll(['userId', 'name', 'colorHex', 'iconKey', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'name', 'colorHex', 'iconKey', 'createdAt', 'updatedAt']) &&
+                       isValidCategory(incoming(), userId) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
+
+      allow update: if isOwner(userId) &&
+                       isValidId(categoryId) &&
+                       isValidCategory(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'colorHex', 'iconKey', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(categoryId);
+    }
+
+    match /users/{userId}/products/{productId} {
+      allow get: if isOwner(userId) && isValidId(productId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(productId) &&
+                       incoming().keys().hasAll(['userId', 'categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'createdAt', 'updatedAt']) &&
+                       isValidProduct(incoming(), userId) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       existsAfter(/databases/$(database)/documents/users/$(userId)/categories/$(incoming().categoryId));
+
+      allow update: if isOwner(userId) &&
+                       isValidId(productId) &&
+                       isValidProduct(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time && (
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'updatedAt']) &&
+                          existsAfter(/databases/$(database)/documents/users/$(userId)/categories/$(incoming().categoryId))) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['stock', 'updatedAt'])
+                       );
+
+      allow delete: if isOwner(userId) && isValidId(productId);
+    }
+
+    match /users/{userId}/sales/{saleId} {
+      allow get: if isOwner(userId) && isValidId(saleId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(saleId) &&
+                       incoming().keys().hasAll(['userId', 'receiptNumber', 'totalAmount', 'itemCount', 'paymentMethod', 'status', 'items', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'receiptNumber', 'totalAmount', 'itemCount', 'paymentMethod', 'status', 'items', 'createdAt', 'updatedAt']) &&
+                       isValidSale(incoming(), userId) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
+
+      allow update, delete: if false;
+    }
+  }
+}

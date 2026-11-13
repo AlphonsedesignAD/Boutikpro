@@ -1,0 +1,6 @@
+{
+  "name": "BoutikPro",
+  "description": "Application dynamique de gestion de boutique : espace Admin (stocks, produits, impression de codes-barres par catégorie) et espace Vendeur (scan direct de code-barres, panier temps réel et confirmation de paiement).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

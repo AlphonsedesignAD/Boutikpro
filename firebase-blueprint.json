@@ -1,0 +1,186 @@
+{
+  "entities": {
+    "Category": {
+      "title": "Category",
+      "description": "A store product category used to organize inventory and group barcode printing.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner UID matching request.auth.uid."
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the category."
+        },
+        "colorHex": {
+          "type": "string",
+          "description": "Accent hex color for the category badge."
+        },
+        "iconKey": {
+          "type": "string",
+          "description": "Identifier for the category icon."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "name", "colorHex", "iconKey", "createdAt", "updatedAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "A boutique inventory item with barcode, category, price, and stock level.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner UID matching request.auth.uid."
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Parent category document ID."
+        },
+        "categoryName": {
+          "type": "string",
+          "description": "Denormalized category name for quick display and barcode labels."
+        },
+        "name": {
+          "type": "string",
+          "description": "Product name."
+        },
+        "barcode": {
+          "type": "string",
+          "description": "Unique EAN-13 or Code-128 barcode string."
+        },
+        "price": {
+          "type": "number",
+          "description": "Unit selling price."
+        },
+        "stock": {
+          "type": "integer",
+          "description": "Current available stock units."
+        },
+        "minStockAlert": {
+          "type": "integer",
+          "description": "Low-stock alert threshold."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "categoryId",
+        "categoryName",
+        "name",
+        "barcode",
+        "price",
+        "stock",
+        "minStockAlert",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SaleItem": {
+      "title": "SaleItem",
+      "description": "Line item snapshot inside a confirmed sale receipt.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "barcode": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "unitPrice": { "type": "number" },
+        "quantity": { "type": "integer" },
+        "lineTotal": { "type": "number" }
+      },
+      "required": ["productId", "productName", "barcode", "categoryName", "unitPrice", "quantity", "lineTotal"]
+    },
+    "Sale": {
+      "title": "Sale",
+      "description": "An immutable confirmed POS sale receipt.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner UID matching request.auth.uid."
+        },
+        "receiptNumber": {
+          "type": "string",
+          "description": "Human-readable receipt identifier."
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Total paid amount."
+        },
+        "itemCount": {
+          "type": "integer",
+          "description": "Total number of units sold."
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["cash", "card", "mobile"],
+          "description": "Payment method used."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["paid"],
+          "description": "Confirmed payment status."
+        },
+        "items": {
+          "type": "array",
+          "description": "Bounded list of sold line items (1..100)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of sale confirmation (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "receiptNumber",
+        "totalAmount",
+        "itemCount",
+        "paymentMethod",
+        "status",
+        "items",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Store product categories owned by the authenticated boutique user."
+    },
+    "/users/{userId}/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Store products and inventory stock levels owned by the authenticated boutique user."
+    },
+    "/users/{userId}/sales/{saleId}": {
+      "schema": { "$ref": "#/entities/Sale" },
+      "description": "Confirmed POS sales receipts owned by the authenticated boutique user."
+    }
+  }
+}
