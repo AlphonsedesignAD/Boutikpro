@@ -12,19 +12,14 @@ Dans Firebase Console, ouvrez le projet `gen-lang-client-0602841838`.
 
 L'application n'affiche pas d'adresse e-mail. Elle transforme les identifiants en adresses techniques internes se terminant par `@boutikpro.app`.
 
-## 2. Créer le compte administrateur une seule fois
+## 2. Premier démarrage
 
-Dans Authentication, ouvrez Users, puis Add user.
-
-- E-mail : `admin@boutikpro.app`
-- Mot de passe Firebase : `002200`
-
-Ce compte doit être créé manuellement dans Firebase Console. Ne créez pas un autre compte avec cette adresse.
-
-Dans BoutikPro, connectez-vous ensuite avec :
+Au premier lancement, saisissez directement :
 
 - Identifiant : `admin`
 - Mot de passe : `0022`
+
+L'application crée automatiquement le compte administrateur dans Firebase Authentication lors de la première connexion. Elle utilise en interne le mot de passe `002200`, car Firebase impose au moins 6 caractères. Vous n'avez pas à créer cet utilisateur manuellement.
 
 ## 3. Publier les règles de sécurité gratuites
 
