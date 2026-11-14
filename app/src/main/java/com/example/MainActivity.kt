@@ -129,7 +129,7 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
         val token = user.getIdToken(true).await()
         accountRole = token.claims["role"] as? String
         storeOwnerId = token.claims["storeOwnerId"] as? String
-        if (accountRole !in listOf("admin", "seller") || storeOwnerId.isNullOrBlank()) {
+        if ((accountRole != "admin" && accountRole != "seller") || storeOwnerId.isNullOrBlank()) {
           auth.signOut()
         }
       } catch (_: Exception) {
