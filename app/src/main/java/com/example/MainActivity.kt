@@ -70,35 +70,15 @@ import com.example.ui.theme.SlateInk
 import com.example.ui.viewmodel.AppRole
 import com.example.ui.viewmodel.StoreViewModel
 import com.google.firebase.Firebase
-import com.google.firebase.appcheck.FirebaseAppCheck
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
-import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.firestore
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
-
-internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
-  val listener = FirebaseAuth.AuthStateListener { auth ->
-    trySend(auth.currentUser)
-  }
-  addAuthStateListener(listener)
-  awaitClose { removeAuthStateListener(listener) }
-}
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    val appCheckFactory = if (BuildConfig.DEBUG) {
-      DebugAppCheckProviderFactory.getInstance()
-    } else {
-      PlayIntegrityAppCheckProviderFactory.getInstance()
-    }
-    FirebaseAppCheck.getInstance().installAppCheckProviderFactory(appCheckFactory)
     enableEdgeToEdge()
     setContent {
       BoutikProTheme {
@@ -110,51 +90,60 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
-  val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(
-    initialValue = auth.currentUser
-  )
-  val user = currentUser
-  var accountRole by remember(user?.uid) { mutableStateOf<String?>(null) }
-  var storeOwnerId by remember(user?.uid) { mutableStateOf<String?>(null) }
-  var checkingAccount by remember(user?.uid) { mutableStateOf(user != null) }
+  val user by auth.currentUserFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+  var isAdmin by remember(user?.uid) { mutableStateOf(false) }
+  var checking by remember(user?.uid) { mutableStateOf(user != null) }
+  val context = LocalContext.current
+  val db = remember(context) {
+    FirebaseFirestore.getInstance(context.getString(R.string.firestore_database_id))
+  }
 
   LaunchedEffect(user?.uid) {
-    if (user == null) {
-      accountRole = null
-      storeOwnerId = null
-      checkingAccount = false
+    val current = user
+    if (current == null) {
+      isAdmin = false
+      checking = false
     } else {
-      checkingAccount = true
+      checking = true
       try {
-        val token = user.getIdToken(true).await()
-        accountRole = token.claims["role"] as? String
-        storeOwnerId = token.claims["storeOwnerId"] as? String
-        if ((accountRole != "admin" && accountRole != "seller") || storeOwnerId.isNullOrBlank()) {
-          auth.signOut()
+        current.reload().await()
+        val email = current.email.orEmpty().lowercase()
+        isAdmin = email == "admin@boutikpro.app"
+        if (!isAdmin) {
+          val profile = db.collection("staff").document(current.uid).get().await()
+          if (!profile.exists() || profile.getBoolean("active") != true) {
+            auth.signOut()
+          }
         }
       } catch (_: Exception) {
         auth.signOut()
       } finally {
-        checkingAccount = false
+        checking = false
       }
     }
   }
 
   if (user == null) {
     AuthScreen(onAuthSuccess = {})
-  } else if (checkingAccount || accountRole == null || storeOwnerId == null) {
+  } else if (checking) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
       CircularProgressIndicator(color = CobaltPrimary)
     }
   } else {
-    key(user.uid) {
+    key(user!!.uid) {
       MainStoreScreen(
-        currentUserId = storeOwnerId!!,
-        userEmail = user.displayName ?: user.email ?: "BoutikPro",
-        isAdmin = accountRole == "admin",
+        currentUserId = "boutikpro-store",
+        userEmail = if (isAdmin) "Administrateur" else user!!.email?.substringBefore("@") ?: "Vendeur",
+        isAdmin = isAdmin,
       )
     }
   }
+}
+
+private fun FirebaseAuth.currentUserFlow() = kotlinx.coroutines.flow.callbackFlow {
+  val listener = FirebaseAuth.AuthStateListener { auth -> trySend(auth.currentUser) }
+  addAuthStateListener(listener)
+  awaitClose { removeAuthStateListener(listener) }
 }
 
 @Composable
