@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Checkroom
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.LocalCafe
+import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Spa
@@ -80,6 +81,9 @@ fun BoutikTopBar(
   onRoleSelected: (AppRole) -> Unit,
   userEmail: String?,
   onSignOut: () -> Unit,
+  canManageAccounts: Boolean = false,
+  onManageAccounts: () -> Unit = {},
+  canSwitchRole: Boolean = true,
 ) {
   Box(
     modifier = Modifier
@@ -132,6 +136,15 @@ fun BoutikTopBar(
           }
         }
 
+        if (canManageAccounts) {
+          IconButton(onClick = onManageAccounts) {
+            Icon(
+              imageVector = Icons.Filled.ManageAccounts,
+              contentDescription = "Gérer les comptes vendeurs",
+              tint = PureWhite,
+            )
+          }
+        }
         IconButton(
           onClick = onSignOut,
           modifier = Modifier.testTag("sign_out_button"),
@@ -144,12 +157,13 @@ fun BoutikTopBar(
         }
       }
 
-      Spacer(modifier = Modifier.height(12.dp))
-
-      AnimatedRoleSwitcher(
-        activeRole = activeRole,
-        onRoleSelected = onRoleSelected,
-      )
+      if (canSwitchRole) {
+        Spacer(modifier = Modifier.height(12.dp))
+        AnimatedRoleSwitcher(
+          activeRole = activeRole,
+          onRoleSelected = onRoleSelected,
+        )
+      }
     }
   }
 }
