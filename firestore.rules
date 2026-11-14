@@ -1,130 +1,126 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Global Safety Net: Default deny all
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    function isSignedIn() {
+    function signedIn() {
       return request.auth != null;
     }
 
     function isAdmin() {
-      return isSignedIn() && request.auth.token.role == 'admin';
+      return signedIn() && request.auth.token.email == 'admin@boutikpro.app';
+    }
+
+    function staffPath() {
+      return /databases/$(database)/documents/staff/$(request.auth.uid);
+    }
+
+    function isActiveStaff() {
+      return isAdmin() ||
+        (signedIn() && exists(staffPath()) && get(staffPath()).data.active == true);
     }
 
     function isOwner(userId) {
-      return isSignedIn() &&
-        (request.auth.uid == userId ||
-         request.auth.token.storeOwnerId == userId);
+      return isActiveStaff() && userId == 'boutikpro-store';
     }
 
-    function incoming() {
-      return request.resource.data;
+    function validId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 &&
+        id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    function existing() {
-      return resource.data;
+    function validCategory(data, userId) {
+      return data.userId == userId &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
+        data.colorHex is string && data.colorHex.size() >= 4 && data.colorHex.size() <= 9 &&
+        data.iconKey is string && data.iconKey.size() >= 1 && data.iconKey.size() <= 40;
     }
 
-    function isValidId(id) {
-      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    function validProduct(data, userId) {
+      return data.userId == userId &&
+        validId(data.categoryId) &&
+        data.categoryName is string && data.categoryName.size() >= 1 && data.categoryName.size() <= 60 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.barcode is string && data.barcode.size() >= 3 && data.barcode.size() <= 64 &&
+        data.price is number && data.price >= 0 && data.price <= 10000000 &&
+        data.stock is int && data.stock >= 0 && data.stock <= 1000000 &&
+        data.minStockAlert is int && data.minStockAlert >= 0 && data.minStockAlert <= 100000;
     }
 
-    function isValidCategory(data, userId) {
-      return data.userId is string && data.userId == userId &&
-             data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
-             data.colorHex is string && data.colorHex.size() >= 4 && data.colorHex.size() <= 9 &&
-             data.iconKey is string && data.iconKey.size() >= 1 && data.iconKey.size() <= 40;
+    function validSale(data, userId) {
+      return data.userId == userId &&
+        data.receiptNumber is string && data.receiptNumber.size() >= 1 && data.receiptNumber.size() <= 40 &&
+        data.totalAmount is number && data.totalAmount >= 0 && data.totalAmount <= 100000000 &&
+        data.itemCount is int && data.itemCount >= 1 && data.itemCount <= 10000 &&
+        data.paymentMethod in ['cash', 'card', 'mobile'] &&
+        data.status == 'paid' &&
+        data.items is list && data.items.size() >= 1 && data.items.size() <= 100;
     }
 
-    function isValidProduct(data, userId) {
-      return data.userId is string && data.userId == userId &&
-             isValidId(data.categoryId) &&
-             data.categoryName is string && data.categoryName.size() >= 1 && data.categoryName.size() <= 60 &&
-             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
-             data.barcode is string && data.barcode.size() >= 3 && data.barcode.size() <= 64 &&
-             data.price is number && data.price >= 0 && data.price <= 10000000 &&
-             data.stock is int && data.stock >= 0 && data.stock <= 1000000 &&
-             data.minStockAlert is int && data.minStockAlert >= 0 && data.minStockAlert <= 100000;
-    }
-
-    function isValidSale(data, userId) {
-      return data.userId is string && data.userId == userId &&
-             data.receiptNumber is string && data.receiptNumber.size() >= 1 && data.receiptNumber.size() <= 40 &&
-             data.totalAmount is number && data.totalAmount >= 0 && data.totalAmount <= 100000000 &&
-             data.itemCount is int && data.itemCount >= 1 && data.itemCount <= 10000 &&
-             data.paymentMethod is string && data.paymentMethod in ['cash', 'card', 'mobile'] &&
-             data.status is string && data.status == 'paid' &&
-             data.items is list && data.items.size() >= 1 && data.items.size() <= 100 &&
-             data.items[0] is map;
+    match /staff/{uid} {
+      allow get: if signedIn() && (isAdmin() || request.auth.uid == uid);
+      allow list: if isAdmin();
+      allow create: if isAdmin() &&
+        request.resource.data.keys().hasOnly(['uid', 'username', 'active', 'createdAt']) &&
+        request.resource.data.uid == uid &&
+        request.resource.data.username is string &&
+        request.resource.data.username.matches('^[a-z0-9._-]{3,30}$') &&
+        request.resource.data.active == true;
+      allow update: if isAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active']) &&
+        request.resource.data.active is bool;
+      allow delete: if isAdmin();
     }
 
     match /users/{userId}/categories/{categoryId} {
-      allow get: if isOwner(userId) && isValidId(categoryId);
+      allow get: if isOwner(userId) && validId(categoryId);
       allow list: if isOwner(userId);
-
-      allow create: if isAdmin() && isOwner(userId) &&
-                       isValidId(categoryId) &&
-                       incoming().keys().hasAll(['userId', 'name', 'colorHex', 'iconKey', 'createdAt', 'updatedAt']) &&
-                       incoming().keys().hasOnly(['userId', 'name', 'colorHex', 'iconKey', 'createdAt', 'updatedAt']) &&
-                       isValidCategory(incoming(), userId) &&
-                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
-                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
-
-      allow update: if isAdmin() && isOwner(userId) &&
-                       isValidId(categoryId) &&
-                       isValidCategory(incoming(), userId) &&
-                       incoming().userId == existing().userId &&
-                       incoming().createdAt == existing().createdAt &&
-                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'colorHex', 'iconKey', 'updatedAt']);
-
-      allow delete: if isAdmin() && isOwner(userId) && isValidId(categoryId);
+      allow create: if isAdmin() && isOwner(userId) && validId(categoryId) &&
+        request.resource.data.keys().hasAll(['userId', 'name', 'colorHex', 'iconKey', 'createdAt', 'updatedAt']) &&
+        request.resource.data.keys().hasOnly(['userId', 'name', 'colorHex', 'iconKey', 'createdAt', 'updatedAt']) &&
+        validCategory(request.resource.data, userId) &&
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.updatedAt is timestamp;
+      allow update: if isAdmin() && isOwner(userId) && validId(categoryId) &&
+        validCategory(request.resource.data, userId) &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'colorHex', 'iconKey', 'updatedAt']);
+      allow delete: if isAdmin() && isOwner(userId) && validId(categoryId);
     }
 
     match /users/{userId}/products/{productId} {
-      allow get: if isOwner(userId) && isValidId(productId);
+      allow get: if isOwner(userId) && validId(productId);
       allow list: if isOwner(userId);
-
-      allow create: if isAdmin() && isOwner(userId) &&
-                       isValidId(productId) &&
-                       incoming().keys().hasAll(['userId', 'categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'createdAt', 'updatedAt']) &&
-                       incoming().keys().hasOnly(['userId', 'categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'createdAt', 'updatedAt']) &&
-                       isValidProduct(incoming(), userId) &&
-                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
-                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
-                       existsAfter(/databases/$(database)/documents/users/$(userId)/categories/$(incoming().categoryId));
-
-      allow update: if isOwner(userId) &&
-                       isValidId(productId) &&
-                       isValidProduct(incoming(), userId) &&
-                       incoming().userId == existing().userId &&
-                       incoming().createdAt == existing().createdAt &&
-                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time && (
-                         (isAdmin() &&
-                          incoming().diff(existing()).affectedKeys().hasOnly(['categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'updatedAt']) &&
-                          existsAfter(/databases/$(database)/documents/users/$(userId)/categories/$(incoming().categoryId))) ||
-                         (request.auth.token.role == 'seller' &&
-                          incoming().diff(existing()).affectedKeys().hasOnly(['stock', 'updatedAt']))
-                       );
-
-      allow delete: if isAdmin() && isOwner(userId) && isValidId(productId);
+      allow create: if isAdmin() && isOwner(userId) && validId(productId) &&
+        request.resource.data.keys().hasAll(['userId', 'categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'createdAt', 'updatedAt']) &&
+        request.resource.data.keys().hasOnly(['userId', 'categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'createdAt', 'updatedAt']) &&
+        validProduct(request.resource.data, userId) &&
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.updatedAt is timestamp &&
+        existsAfter(/databases/$(database)/documents/users/$(userId)/categories/$(request.resource.data.categoryId));
+      allow update: if isOwner(userId) && validId(productId) &&
+        validProduct(request.resource.data, userId) &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedAt is timestamp &&
+        (
+          (isAdmin() &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'updatedAt']) &&
+            existsAfter(/databases/$(database)/documents/users/$(userId)/categories/$(request.resource.data.categoryId))) ||
+          (!isAdmin() &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'updatedAt']))
+        );
+      allow delete: if isAdmin() && isOwner(userId) && validId(productId);
     }
 
     match /users/{userId}/sales/{saleId} {
-      allow get: if isOwner(userId) && isValidId(saleId);
+      allow get: if isOwner(userId) && validId(saleId);
       allow list: if isOwner(userId);
-
-      allow create: if isOwner(userId) &&
-                       isValidId(saleId) &&
-                       incoming().keys().hasAll(['userId', 'receiptNumber', 'totalAmount', 'itemCount', 'paymentMethod', 'status', 'items', 'createdAt', 'updatedAt']) &&
-                       incoming().keys().hasOnly(['userId', 'receiptNumber', 'totalAmount', 'itemCount', 'paymentMethod', 'status', 'items', 'createdAt', 'updatedAt']) &&
-                       isValidSale(incoming(), userId) &&
-                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
-                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
-
+      allow create: if isOwner(userId) && validId(saleId) &&
+        request.resource.data.keys().hasAll(['userId', 'receiptNumber', 'totalAmount', 'itemCount', 'paymentMethod', 'status', 'items', 'createdAt', 'updatedAt']) &&
+        request.resource.data.keys().hasOnly(['userId', 'receiptNumber', 'totalAmount', 'itemCount', 'paymentMethod', 'status', 'items', 'createdAt', 'updatedAt']) &&
+        validSale(request.resource.data, userId) &&
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.updatedAt is timestamp;
       allow update, delete: if false;
     }
   }
