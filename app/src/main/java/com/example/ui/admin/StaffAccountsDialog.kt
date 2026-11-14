@@ -98,7 +98,7 @@ fun StaffAccountsDialog(onDismiss: () -> Unit) {
         OutlinedTextField(
           value = username,
           onValueChange = {
-            username = it.lowercase().filter { ch -> ch.isLetterOrDigit() || ch in "._-" }.take(30)
+            username = it.lowercase().filter { ch -> ch in 'a'..'z' || ch in '0'..'9' || ch in "._-" }.take(30)
             message = null
           },
           label = { Text("Nouvel identifiant") },
