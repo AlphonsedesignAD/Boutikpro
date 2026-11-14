@@ -8,7 +8,7 @@ L'application utilise des identifiants internes, sans adresse e-mail demandée a
 2. Depuis la racine du dépôt, exécuter :
 
 ```bash
-firebase functions:secrets:set ADMIN_BOOTSTRAP_PASSWORD
+firebase functions:secrets:set ADMIN_BOOTSTRAP_PASSWORD --project gen-lang-client-0602841838
 ```
 
 Saisir le mot de passe administrateur initial : 0022.
@@ -19,7 +19,7 @@ Saisir le mot de passe administrateur initial : 0022.
 cd functions
 npm install
 cd ..
-firebase deploy --only functions,firestore:rules
+firebase deploy --project gen-lang-client-0602841838 --only functions,firestore:rules
 ```
 
 Les fonctions exigent App Check. Pour l'APK debug, récupérer le jeton Debug App Check dans Logcat puis l'enregistrer dans Firebase Console > App Check > Apps > BoutikPro > Manage debug tokens. Pour une version distribuée, activer le fournisseur Play Integrity et enregistrer l'application Android dans App Check.
