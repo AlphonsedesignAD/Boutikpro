@@ -22,6 +22,6 @@ cd ..
 firebase deploy --only functions,firestore:rules
 ```
 
-Les fonctions exigent App Check. Il faut activer App Check pour l'application Android avant d'utiliser les appels.
+Les fonctions exigent App Check. Pour l'APK debug, récupérer le jeton Debug App Check dans Logcat puis l'enregistrer dans Firebase Console > App Check > Apps > BoutikPro > Manage debug tokens. Pour une version distribuée, activer le fournisseur Play Integrity et enregistrer l'application Android dans App Check.
 
 Le compte administrateur est créé automatiquement au premier login valide. Les comptes vendeurs sont créés par l'administrateur. Ils partagent le même espace de données de boutique.
