@@ -7,7 +7,7 @@ const bcrypt = require("bcryptjs");
 
 initializeApp();
 
-const db = getFirestore();
+const db = getFirestore("ai-studio-android-boutikpr-f4de8b3d-3cf5-4bd2-853f-8b29246f2729");
 const adminBootstrapPassword = defineSecret("ADMIN_BOOTSTRAP_PASSWORD");
 const ADMIN_UID = "boutikpro-admin";
 
