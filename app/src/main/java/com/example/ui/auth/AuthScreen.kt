@@ -133,7 +133,20 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
                 val firebasePassword = if (
                   username.trim().equals("admin", ignoreCase = true)
                 ) password.padEnd(6, '0') else password
-                Firebase.auth.signInWithEmailAndPassword(email, firebasePassword).await()
+                if (username.trim().equals("admin", ignoreCase = true)) {
+                  try {
+                    Firebase.auth.signInWithEmailAndPassword(email, firebasePassword).await()
+                  } catch (signInError: Exception) {
+                    val authError = signInError as? com.google.firebase.auth.FirebaseAuthInvalidUserException
+                    if (authError != null) {
+                      Firebase.auth.createUserWithEmailAndPassword(email, firebasePassword).await()
+                    } else {
+                      throw signInError
+                    }
+                  }
+                } else {
+                  Firebase.auth.signInWithEmailAndPassword(email, firebasePassword).await()
+                }
                 onAuthSuccess()
               } catch (e: Exception) {
                 error = e.localizedMessage ?: "Connexion impossible. Vérifiez vos identifiants."
