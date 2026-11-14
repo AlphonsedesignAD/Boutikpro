@@ -11,7 +11,9 @@ service cloud.firestore {
     }
 
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+      return isSignedIn() &&
+        (request.auth.uid == userId ||
+         request.auth.token.storeOwnerId == userId);
     }
 
     function incoming() {
