@@ -41,7 +41,6 @@ import com.example.ui.theme.IceBackground
 import com.example.ui.theme.PureWhite
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
-import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -126,15 +125,12 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
             error = null
             scope.launch {
               try {
-                val response = FirebaseFunctions.getInstance()
-                  .getHttpsCallable("loginWithUsername")
-                  .call(mapOf("username" to username.trim(), "password" to password))
-                  .await()
-                val data = response.data as? Map<*, *>
-                  ?: throw IllegalStateException("Réponse du serveur invalide.")
-                val token = data["token"] as? String
-                  ?: throw IllegalStateException("Jeton de connexion absent.")
-                Firebase.auth.signInWithCustomToken(token).await()
+                val email = if (username.trim().equals("admin", ignoreCase = true)) {
+                  "admin@boutikpro.app"
+                } else {
+                  "${username.trim().lowercase()}@boutikpro.app"
+                }
+                Firebase.auth.signInWithEmailAndPassword(email, password).await()
                 onAuthSuccess()
               } catch (e: Exception) {
                 error = e.localizedMessage ?: "Connexion impossible. Vérifiez vos identifiants."
