@@ -1,5 +1,6 @@
 package com.example.ui.admin
 
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,9 +27,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.google.firebase.functions.FirebaseFunctions
+import com.example.R
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -38,10 +43,26 @@ private data class StaffAccount(
   val active: Boolean,
 )
 
+private fun secondaryAuth(context: Context): FirebaseAuth {
+  val app = try {
+    FirebaseApp.getInstance("BoutikProStaffCreator")
+  } catch (_: IllegalStateException) {
+    FirebaseApp.initializeApp(
+      context,
+      FirebaseApp.getInstance().options,
+      "BoutikProStaffCreator",
+    ) ?: FirebaseApp.getInstance("BoutikProStaffCreator")
+  }
+  return FirebaseAuth.getInstance(app)
+}
+
 @Composable
 fun StaffAccountsDialog(onDismiss: () -> Unit) {
-  val functions = remember { FirebaseFunctions.getInstance() }
+  val context = LocalContext.current
   val scope = rememberCoroutineScope()
+  val db = remember(context) {
+    FirebaseFirestore.getInstance(context.getString(R.string.firestore_database_id))
+  }
   var accounts by remember { mutableStateOf<List<StaffAccount>>(emptyList()) }
   var username by remember { mutableStateOf("") }
   var password by remember { mutableStateOf("") }
@@ -53,17 +74,11 @@ fun StaffAccountsDialog(onDismiss: () -> Unit) {
     scope.launch {
       loading = true
       try {
-        val result = functions.getHttpsCallable("listStaffAccounts").call().await()
-        val data = result.data as? Map<*, *>
-        val rows = data?.get("accounts") as? List<*> ?: emptyList<Any>()
-        accounts = rows.mapNotNull { row ->
-          val item = row as? Map<*, *> ?: return@mapNotNull null
-          StaffAccount(
-            uid = item["uid"] as? String ?: return@mapNotNull null,
-            username = item["username"] as? String ?: return@mapNotNull null,
-            active = item["active"] as? Boolean ?: false,
-          )
-        }
+        val snapshot = db.collection("staff").get().await()
+        accounts = snapshot.documents.mapNotNull { doc ->
+          val name = doc.getString("username") ?: return@mapNotNull null
+          StaffAccount(doc.id, name, doc.getBoolean("active") == true)
+        }.sortedBy { it.username.lowercase() }
         message = null
       } catch (e: Exception) {
         message = e.localizedMessage ?: "Impossible de charger les comptes."
@@ -82,14 +97,17 @@ fun StaffAccountsDialog(onDismiss: () -> Unit) {
       Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         OutlinedTextField(
           value = username,
-          onValueChange = { username = it.lowercase().filter { ch -> ch.isLetterOrDigit() || ch in "._-" }.take(30) },
+          onValueChange = {
+            username = it.lowercase().filter { ch -> ch.isLetterOrDigit() || ch in "._-" }.take(30)
+            message = null
+          },
           label = { Text("Nouvel identifiant") },
           singleLine = true,
           modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
           value = password,
-          onValueChange = { password = it },
+          onValueChange = { password = it; message = null },
           label = { Text("Mot de passe") },
           visualTransformation = PasswordVisualTransformation(),
           singleLine = true,
@@ -98,28 +116,45 @@ fun StaffAccountsDialog(onDismiss: () -> Unit) {
         Button(
           onClick = {
             saving = true
+            message = null
             scope.launch {
+              val auth = secondaryAuth(context)
               try {
-                functions.getHttpsCallable("createStaffAccount")
-                  .call(mapOf("username" to username, "password" to password)).await()
+                val email = "$username@boutikpro.app"
+                val credential = auth.createUserWithEmailAndPassword(email, password).await()
+                val uid = credential.user?.uid ?: error("Compte Firebase non créé.")
+                try {
+                  db.collection("staff").document(uid).set(
+                    mapOf(
+                      "uid" to uid,
+                      "username" to username,
+                      "active" to true,
+                      "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                    )
+                  ).await()
+                } catch (e: Exception) {
+                  credential.user?.delete()?.await()
+                  throw e
+                }
+                auth.signOut()
                 username = ""
                 password = ""
-                message = "Compte créé."
+                message = "Compte vendeur créé."
                 refresh()
               } catch (e: Exception) {
+                auth.signOut()
                 message = e.localizedMessage ?: "Création impossible."
               } finally {
                 saving = false
               }
             }
           },
-          enabled = !saving && username.length >= 3 && password.length >= 4,
+          enabled = !saving && username.length >= 3 && password.length >= 6,
           modifier = Modifier.fillMaxWidth(),
         ) {
           if (saving) CircularProgressIndicator()
           else Text("Créer le compte vendeur")
         }
-        Spacer(Modifier.height(4.dp))
         Text("Comptes existants", style = MaterialTheme.typography.titleSmall)
         if (loading) {
           CircularProgressIndicator()
@@ -145,8 +180,8 @@ fun StaffAccountsDialog(onDismiss: () -> Unit) {
                     onClick = {
                       scope.launch {
                         try {
-                          functions.getHttpsCallable("setStaffAccountActive")
-                            .call(mapOf("uid" to account.uid, "active" to !account.active)).await()
+                          db.collection("staff").document(account.uid)
+                            .update("active", !account.active).await()
                           refresh()
                         } catch (e: Exception) {
                           message = e.localizedMessage ?: "Modification impossible."
@@ -164,6 +199,7 @@ fun StaffAccountsDialog(onDismiss: () -> Unit) {
         if (message != null) {
           Text(message ?: "", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
+        Spacer(Modifier.height(2.dp))
       }
     },
     confirmButton = { TextButton(onClick = onDismiss) { Text("Fermer") } },
