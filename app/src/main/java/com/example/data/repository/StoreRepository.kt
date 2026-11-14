@@ -30,17 +30,19 @@ import kotlinx.coroutines.tasks.await
 class StoreRepository(
   private val db: FirebaseFirestore,
   private val auth: FirebaseAuth = Firebase.auth,
+  private val ownerId: String? = null,
 ) {
   constructor(context: Context) : this(
     db = FirebaseFirestore.getInstance(
       context.applicationContext.getString(R.string.firestore_database_id)
     ),
     auth = Firebase.auth,
+    ownerId = null,
   )
 
   private fun requireUserId(): String {
-    return auth.currentUser?.uid
-      ?: throw IllegalStateException("L'utilisateur doit être connecté avec Google pour accéder à la boutique.")
+    return ownerId ?: auth.currentUser?.uid
+      ?: throw IllegalStateException("Une session valide est nécessaire pour accéder à la boutique.")
   }
 
   fun observeCategories(userId: String): Flow<List<Category>> = flow {
