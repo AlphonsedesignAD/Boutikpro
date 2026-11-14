@@ -130,7 +130,10 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
                 } else {
                   "${username.trim().lowercase()}@boutikpro.app"
                 }
-                Firebase.auth.signInWithEmailAndPassword(email, password).await()
+                val firebasePassword = if (
+                  username.trim().equals("admin", ignoreCase = true)
+                ) password.padEnd(6, '0') else password
+                Firebase.auth.signInWithEmailAndPassword(email, firebasePassword).await()
                 onAuthSuccess()
               } catch (e: Exception) {
                 error = e.localizedMessage ?: "Connexion impossible. Vérifiez vos identifiants."
