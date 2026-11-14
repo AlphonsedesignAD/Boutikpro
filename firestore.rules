@@ -10,6 +10,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.role == 'admin';
+    }
+
     function isOwner(userId) {
       return isSignedIn() &&
         (request.auth.uid == userId ||
@@ -61,7 +65,7 @@ service cloud.firestore {
       allow get: if isOwner(userId) && isValidId(categoryId);
       allow list: if isOwner(userId);
 
-      allow create: if isOwner(userId) &&
+      allow create: if isAdmin() && isOwner(userId) &&
                        isValidId(categoryId) &&
                        incoming().keys().hasAll(['userId', 'name', 'colorHex', 'iconKey', 'createdAt', 'updatedAt']) &&
                        incoming().keys().hasOnly(['userId', 'name', 'colorHex', 'iconKey', 'createdAt', 'updatedAt']) &&
@@ -69,7 +73,7 @@ service cloud.firestore {
                        incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
                        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
 
-      allow update: if isOwner(userId) &&
+      allow update: if isAdmin() && isOwner(userId) &&
                        isValidId(categoryId) &&
                        isValidCategory(incoming(), userId) &&
                        incoming().userId == existing().userId &&
@@ -77,7 +81,7 @@ service cloud.firestore {
                        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
                        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'colorHex', 'iconKey', 'updatedAt']);
 
-      allow delete: if isOwner(userId) && isValidId(categoryId);
+      allow delete: if isAdmin() && isOwner(userId) && isValidId(categoryId);
     }
 
     match /users/{userId}/products/{productId} {
