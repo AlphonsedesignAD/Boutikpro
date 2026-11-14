@@ -40,6 +40,7 @@ import com.example.ui.theme.DeepSapphire
 import com.example.ui.theme.IceBackground
 import com.example.ui.theme.PureWhite
 import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.auth
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -125,23 +126,34 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
             error = null
             scope.launch {
               try {
-                val email = if (username.trim().equals("admin", ignoreCase = true)) {
+                val isAdmin = username.trim().equals("admin", ignoreCase = true)
+                val email = if (isAdmin) {
                   "admin@boutikpro.app"
                 } else {
                   "${username.trim().lowercase()}@boutikpro.app"
                 }
-                val firebasePassword = if (
-                  username.trim().equals("admin", ignoreCase = true)
-                ) password.padEnd(6, '0') else password
-                if (username.trim().equals("admin", ignoreCase = true)) {
+                val firebasePassword = if (isAdmin) password.padEnd(6, '0') else password
+
+                if (isAdmin) {
                   try {
                     Firebase.auth.signInWithEmailAndPassword(email, firebasePassword).await()
                   } catch (signInError: Exception) {
-                    val authError = signInError as? com.google.firebase.auth.FirebaseAuthInvalidUserException
-                    if (authError != null) {
+                    val code = (signInError as? FirebaseAuthException)?.errorCode
+                    val canCreateFirstAdmin = code in setOf(
+                      "ERROR_INVALID_CREDENTIAL",
+                      "ERROR_USER_NOT_FOUND",
+                      "ERROR_WRONG_PASSWORD",
+                    )
+                    if (!canCreateFirstAdmin) throw signInError
+
+                    try {
                       Firebase.auth.createUserWithEmailAndPassword(email, firebasePassword).await()
-                    } else {
-                      throw signInError
+                    } catch (createError: Exception) {
+                      val createCode = (createError as? FirebaseAuthException)?.errorCode
+                      if (createCode == "ERROR_EMAIL_ALREADY_IN_USE") {
+                        throw signInError
+                      }
+                      throw createError
                     }
                   }
                 } else {
@@ -149,7 +161,13 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
                 }
                 onAuthSuccess()
               } catch (e: Exception) {
-                error = e.localizedMessage ?: "Connexion impossible. Vérifiez vos identifiants."
+                error = when ((e as? FirebaseAuthException)?.errorCode) {
+                  "ERROR_OPERATION_NOT_ALLOWED" ->
+                    "Activez Email/Mot de passe dans Firebase Authentication."
+                  "ERROR_EMAIL_ALREADY_IN_USE", "ERROR_INVALID_CREDENTIAL", "ERROR_WRONG_PASSWORD" ->
+                    "Identifiant ou mot de passe incorrect."
+                  else -> e.localizedMessage ?: "Connexion impossible. Vérifiez vos identifiants."
+                }
               } finally {
                 loading = false
               }
