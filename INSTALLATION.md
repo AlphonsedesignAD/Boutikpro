@@ -17,7 +17,7 @@ L'application n'affiche pas d'adresse e-mail. Elle transforme les identifiants e
 Dans Authentication, ouvrez Users, puis Add user.
 
 - E-mail : `admin@boutikpro.app`
-- Mot de passe : `0022`
+- Mot de passe Firebase : `002200`
 
 Ce compte doit être créé manuellement dans Firebase Console. Ne créez pas un autre compte avec cette adresse.
 
