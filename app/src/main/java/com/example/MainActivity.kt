@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -54,6 +55,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.data.repository.StoreRepository
 import com.example.ui.admin.AdminScreen
 import com.example.ui.admin.AdminTab
+import com.example.ui.admin.StaffAccountsDialog
 import com.example.ui.auth.AuthScreen
 import com.example.ui.auth.signOut
 import com.example.ui.components.BoutikTopBar
@@ -77,6 +79,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
 
 internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
   val listener = FirebaseAuth.AuthStateListener { auth ->
@@ -107,13 +110,44 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
     initialValue = auth.currentUser
   )
   val user = currentUser
+  var accountRole by remember(user?.uid) { mutableStateOf<String?>(null) }
+  var storeOwnerId by remember(user?.uid) { mutableStateOf<String?>(null) }
+  var checkingAccount by remember(user?.uid) { mutableStateOf(user != null) }
+
+  LaunchedEffect(user?.uid) {
+    if (user == null) {
+      accountRole = null
+      storeOwnerId = null
+      checkingAccount = false
+    } else {
+      checkingAccount = true
+      try {
+        val token = user.getIdToken(true).await()
+        accountRole = token.claims["role"] as? String
+        storeOwnerId = token.claims["storeOwnerId"] as? String
+        if (accountRole !in listOf("admin", "seller") || storeOwnerId.isNullOrBlank()) {
+          auth.signOut()
+        }
+      } catch (_: Exception) {
+        auth.signOut()
+      } finally {
+        checkingAccount = false
+      }
+    }
+  }
+
   if (user == null) {
     AuthScreen(onAuthSuccess = {})
+  } else if (checkingAccount || accountRole == null || storeOwnerId == null) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+      CircularProgressIndicator(color = CobaltPrimary)
+    }
   } else {
     key(user.uid) {
       MainStoreScreen(
-        currentUserId = user.uid,
-        userEmail = user.email,
+        currentUserId = storeOwnerId!!,
+        userEmail = user.displayName ?: user.email ?: "BoutikPro",
+        isAdmin = accountRole == "admin",
       )
     }
   }
@@ -123,6 +157,7 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
 fun MainStoreScreen(
   currentUserId: String,
   userEmail: String?,
+  isAdmin: Boolean,
 ) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
@@ -137,7 +172,7 @@ fun MainStoreScreen(
         }
         val databaseId = app.getString(R.string.firestore_database_id)
         val db = FirebaseFirestore.getInstance(databaseId)
-        StoreViewModel(StoreRepository(db), currentUserId)
+        StoreViewModel(StoreRepository(db, ownerId = currentUserId), currentUserId)
       }
     },
   )
@@ -156,6 +191,15 @@ fun MainStoreScreen(
   var sellerTab by rememberSaveable { mutableStateOf(SellerTab.POS) }
   var adminTab by rememberSaveable { mutableStateOf(AdminTab.INVENTORY) }
   val snackbarHostState = remember { SnackbarHostState() }
+  var showStaffAccounts by remember { mutableStateOf(false) }
+
+  LaunchedEffect(isAdmin) {
+    viewModel.switchRole(if (isAdmin) AppRole.ADMIN else AppRole.SELLER)
+  }
+
+  if (showStaffAccounts && isAdmin) {
+    StaffAccountsDialog(onDismiss = { showStaffAccounts = false })
+  }
 
   LaunchedEffect(actionMessage) {
     actionMessage?.let { msg ->
@@ -178,6 +222,9 @@ fun MainStoreScreen(
           activeRole = activeRole,
           onRoleSelected = viewModel::switchRole,
           userEmail = userEmail,
+          canManageAccounts = isAdmin,
+          onManageAccounts = { showStaffAccounts = true },
+          canSwitchRole = isAdmin,
           onSignOut = {
             signOut(
               credentialManager = credentialManager,
