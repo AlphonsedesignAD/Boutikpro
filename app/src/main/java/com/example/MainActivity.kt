@@ -68,6 +68,8 @@ import com.example.ui.theme.SlateInk
 import com.example.ui.viewmodel.AppRole
 import com.example.ui.viewmodel.StoreViewModel
 import com.google.firebase.Firebase
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
@@ -87,6 +89,9 @@ internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+      PlayIntegrityAppCheckProviderFactory.getInstance()
+    )
     enableEdgeToEdge()
     setContent {
       BoutikProTheme {
