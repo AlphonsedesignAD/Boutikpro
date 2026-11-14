@@ -88,7 +88,7 @@ service cloud.firestore {
       allow get: if isOwner(userId) && isValidId(productId);
       allow list: if isOwner(userId);
 
-      allow create: if isOwner(userId) &&
+      allow create: if isAdmin() && isOwner(userId) &&
                        isValidId(productId) &&
                        incoming().keys().hasAll(['userId', 'categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'createdAt', 'updatedAt']) &&
                        incoming().keys().hasOnly(['userId', 'categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'createdAt', 'updatedAt']) &&
@@ -103,12 +103,14 @@ service cloud.firestore {
                        incoming().userId == existing().userId &&
                        incoming().createdAt == existing().createdAt &&
                        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time && (
-                         (incoming().diff(existing()).affectedKeys().hasOnly(['categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'updatedAt']) &&
+                         (isAdmin() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['categoryId', 'categoryName', 'name', 'barcode', 'price', 'stock', 'minStockAlert', 'updatedAt']) &&
                           existsAfter(/databases/$(database)/documents/users/$(userId)/categories/$(incoming().categoryId))) ||
-                         incoming().diff(existing()).affectedKeys().hasOnly(['stock', 'updatedAt'])
+                         (request.auth.token.role == 'seller' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['stock', 'updatedAt']))
                        );
 
-      allow delete: if isOwner(userId) && isValidId(productId);
+      allow delete: if isAdmin() && isOwner(userId) && isValidId(productId);
     }
 
     match /users/{userId}/sales/{saleId} {
